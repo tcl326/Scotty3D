@@ -1,4 +1,5 @@
 #include <vector>
+#include <iostream>
 #include <float.h>
 #include <assert.h>
 #include "meshEdit.h"
@@ -40,21 +41,128 @@ namespace CMU462
 
   FaceIter HalfedgeMesh::eraseVertex(VertexIter v)
   {
-    // TODO: (meshEdit)
     // This method should replace the given vertex and all its neighboring
     // edges and faces with a single face, returning the new face.
 
-    return FaceIter();
+    //Collect Elements
+    std::vector<EdgeIter> edge_neighbours;
+    HalfedgeIter h = v->halfedge();
+    do
+    {
+      edge_neighbours.push_back(h->edge());
+      h = h->twin()->next();
+    } while (h != v->halfedge());
+
+    //Erase Edges
+    FaceIter f;
+    while (!edge_neighbours.empty())
+    {
+      EdgeIter e = edge_neighbours.back();
+      edge_neighbours.pop_back();
+      f = eraseEdge(e);
+    }
+
+    return f;
   }
 
   FaceIter HalfedgeMesh::eraseEdge(EdgeIter e)
   {
-    // TODO: (meshEdit)
     // This method should erase the given edge and return an iterator to the
     // merged face.
 
-    showError("eraseVertex() not implemented.");
-    return FaceIter();
+    // Do nothing if the edge is at Boundary
+    if (e->isBoundary())
+    {
+      return e->halfedge()->face();
+    }
+
+    // Collect Elements
+    // HALFEDGES
+    HalfedgeIter h0 = e->halfedge();
+    HalfedgeIter h1 = h0->twin();
+
+    std::vector<HalfedgeIter> h0_neighbours;
+
+    HalfedgeIter h0_next = h0;
+    while (h0_next->next() != h0)
+    {
+      h0_next = h0_next->next();
+      h0_neighbours.push_back(h0_next);
+    }
+
+    std::vector<HalfedgeIter> h1_neighbours;
+
+    HalfedgeIter h1_next = h1;
+    while (h1_next->next() != h1)
+    {
+      h1_next = h1_next->next();
+      h1_neighbours.push_back(h1_next);
+    }
+
+    //VERTICES
+    VertexIter v0 = h0->vertex();
+    VertexIter v1 = h1->vertex();
+
+    //FACES
+    FaceIter f0 = h0->face();
+    FaceIter f1 = h1->face();
+
+    bool delv0 = v0->degree() == 1;
+    bool delv1 = v1->degree() == 1;
+
+    //Reassign Elements
+    //HALFEDGES
+    for (auto h : h1_neighbours)
+    {
+      h->face() = f0;
+    }
+
+    h1_neighbours.back()->next() = h0_neighbours.front();
+    h0_neighbours.back()->next() = h1_neighbours.front();
+
+    //VERTICES
+    if (!delv0)
+    {
+      v0->halfedge() = h1_neighbours.front();
+    }
+    if (!delv1)
+    {
+      v1->halfedge() = h0_neighbours.front();
+    }
+
+    //FACES
+    if (!delv0 || !delv1)
+    {
+      if (!delv0)
+      {
+        f0->halfedge() = h1_neighbours.front();
+      }
+      else if (!delv1)
+      {
+        f0->halfedge() = h0_neighbours.front();
+      }
+    }
+
+    //Delete Elements
+    h1_neighbours.clear();
+    h0_neighbours.clear();
+    deleteHalfedge(h0);
+    deleteHalfedge(h1);
+    deleteEdge(e);
+    if (!delv0 && !delv1)
+    {
+      deleteFace(f1);
+    }
+    if (delv0)
+    {
+      deleteVertex(v0);
+    }
+    if (delv1)
+    {
+      deleteVertex(v1);
+    }
+
+    return f0;
   }
 
   EdgeIter HalfedgeMesh::flipEdge(EdgeIter e0)
