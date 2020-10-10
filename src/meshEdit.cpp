@@ -26,8 +26,136 @@ namespace CMU462
     // This method should collapse the given edge and return an iterator to
     // the new vertex created by the collapse.
 
-    showError("collapseEdge() not implemented.");
-    return VertexIter();
+    if (e->isBoundary())
+    {
+      return e->halfedge()->vertex();
+    }
+
+    //Collect Elements
+    HalfedgeIter h0 = e->halfedge();
+    HalfedgeIter h1 = h0->twin();
+
+    HalfedgeIter h0_1 = h0->next();
+    HalfedgeIter h0_2 = h0_1->next();
+
+    HalfedgeIter h1_1 = h1->next();
+    HalfedgeIter h1_2 = h1_1->next();
+
+    HalfedgeIter prev_h0 = h0;
+    while (prev_h0->next() != h0)
+    {
+      prev_h0 = prev_h0->next();
+    }
+    HalfedgeIter prev_h1 = h1;
+    while (prev_h1->next() != h1)
+    {
+      prev_h1 = prev_h1->next();
+    }
+
+    EdgeIter e0_1 = h0_1->edge();
+    EdgeIter e0_2 = h0_2->edge();
+    EdgeIter e1_1 = h1_1->edge();
+    EdgeIter e1_2 = h1_2->edge();
+
+    FaceIter f0 = h0->face();
+    FaceIter f1 = h1->face();
+
+    VertexIter v0 = h0->vertex();
+    VertexIter v1 = h1->vertex();
+
+    VertexIter v0_1 = h0_2->vertex();
+    VertexIter v1_1 = h1_2->vertex();
+
+    std::vector<HalfedgeIter> v1_halfedges;
+    HalfedgeIter h = h1->twin()->next();
+    while (h != h1)
+    {
+      v1_halfedges.push_back(h);
+      h = h->twin()->next();
+    }
+
+    bool delf0 = false;
+    bool delf1 = false;
+
+    int f0_degree = f0->degree();
+    int f1_degree = f1->degree();
+
+    if (f0_degree == 3) // We will have to delete f0
+    {
+      delf0 = true;
+      if (h0_1->isBoundary() || h0_2->isBoundary())
+      {
+        return e->halfedge()->vertex();
+      }
+
+      h0_1->twin()->twin() = h0_2->twin();
+      h0_2->twin()->twin() = h0_1->twin();
+      h0_1->twin()->edge() = e0_2;
+
+      e0_2->halfedge() = h0_1->twin();
+
+      v0_1->halfedge() = h0_1->twin();
+    }
+    else // We will keep f0
+    {
+      prev_h0->next() = h0->next();
+      f0->halfedge() = prev_h0;
+    }
+
+    if (f1_degree == 3) // We will have to delete f1
+    {
+      delf1 = true;
+      if (h1_1->isBoundary() || h1_2->isBoundary())
+      {
+        return e->halfedge()->vertex();
+      }
+
+      h1_1->twin()->twin() = h1_2->twin();
+      h1_2->twin()->twin() = h1_1->twin();
+      h1_2->twin()->edge() = e1_1;
+
+      e1_1->halfedge() = h1_2->twin();
+
+      v1_1->halfedge() = h1_2->twin();
+    }
+    else // We will keep f1
+    {
+      prev_h1->next() = h1->next();
+      f1->halfedge() = prev_h1;
+    }
+
+    // Set v0 position
+    v0->position = e->centroid();
+    v0->halfedge() = prev_h0->twin();
+
+    // Assign all v1 neighbour half edges's vertex to v0
+    for (HalfedgeIter h : v1_halfedges)
+    {
+      h->vertex() = v0;
+    }
+
+    deleteHalfedge(h0);
+    deleteHalfedge(h1);
+    deleteVertex(v1);
+    deleteEdge(e);
+
+    if (delf0)
+    {
+      deleteEdge(e0_1);
+      deleteHalfedge(h0_1);
+      deleteHalfedge(h0_2);
+      deleteFace(f0);
+    }
+
+    if (delf1)
+    {
+      deleteEdge(e1_2);
+      deleteHalfedge(h1_1);
+      deleteHalfedge(h1_2);
+      deleteFace(f1);
+    }
+
+    return v0;
   }
 
   VertexIter HalfedgeMesh::collapseFace(FaceIter f)
