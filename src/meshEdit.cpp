@@ -160,11 +160,30 @@ namespace CMU462
 
   VertexIter HalfedgeMesh::collapseFace(FaceIter f)
   {
-    // TODO: (meshEdit)
     // This method should collapse the given face and return an iterator to
     // the new vertex created by the collapse.
-    showError("collapseFace() not implemented.");
-    return VertexIter();
+
+    Vector3D f_centroid = f->centroid();
+    std::vector<EdgeIter> f_edges;
+    HalfedgeIter h = f->halfedge();
+    VertexIter v;
+
+    while (h->next() != f->halfedge())
+    {
+      f_edges.push_back(h->edge());
+      h = h->next();
+    }
+    f_edges.push_back(h->edge());
+
+    for (int i = 0; i < f_edges.size() - 2; i++)
+    {
+      std::cout << i << std::endl;
+      v = collapseEdge(f_edges[i]);
+    }
+
+    v->position = f_centroid;
+
+    return v;
   }
 
   FaceIter HalfedgeMesh::eraseVertex(VertexIter v)
