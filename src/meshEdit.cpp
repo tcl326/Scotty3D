@@ -611,8 +611,71 @@ namespace CMU462
     // HalfedgeMesh::bevelFaceComputeNewPositions (which you also have to
     // implement!)
 
-    showError("bevelFace() not implemented.");
-    return facesBegin();
+    if (f->isBoundary())
+    {
+      return f;
+    }
+    size_t sides = f->degree();
+
+    vector<HalfedgeIter> new_h;
+    vector<VertexIter> new_v;
+    vector<EdgeIter> new_e;
+    vector<FaceIter> new_face;
+
+    HalfedgeIter old_h = f->halfedge();
+
+    //initialize pointers to new elems
+    for (size_t i = 0; i < sides; i++)
+    {
+      //add #sides faces
+      new_face.push_back(newFace());
+      //add #sides vertices
+      new_v.push_back(newVertex());
+      //add 2*#sides edges
+      new_e.push_back(newEdge());
+      new_e.push_back(newEdge());
+      //add 4*#sides halfedges
+      new_h.push_back(newHalfedge());
+      new_h.push_back(newHalfedge());
+      new_h.push_back(newHalfedge());
+      new_h.push_back(newHalfedge());
+    }
+
+    //temp_h can save the value of old_h, before we change the next() of old_h
+    HalfedgeIter temp_h;
+
+    //set the relationship between elems
+    for (size_t i = 0; i < sides; i++)
+    {
+      //old halfedge should change face and next
+      old_h->face() = new_face[i];
+
+      //initialize halfedge for newface
+      new_face[i]->halfedge() = old_h;
+
+      //initialize halfedge for newedge
+      new_e[i * 2]->halfedge() = new_h[4 * i];
+      new_e[i * 2 + 1]->halfedge() = new_h[i * 4 + 1];
+
+      //intialize halfedge for newvertex
+      new_v[i]->halfedge() = new_h[i * 4 + 1];
+      new_v[i]->position = old_h->next()->vertex()->position;
+
+      //intialize the value for newhalfedges
+      new_h[i * 4]->setNeighbors(new_h[i * 4 + 1], new_h[((i + 1) % sides) * 4 + 2], old_h->next()->vertex(), new_e[i * 2], new_face[i]);
+      new_h[i * 4 + 1]->setNeighbors(new_h[i * 4 + 2], new_h[i * 4 + 3], new_v[i], new_e[i * 2 + 1], new_face[i]);
+      new_h[i * 4 + 2]->setNeighbors(old_h, new_h[((i - 1 + sides) % sides) * 4], new_v[(i - 1 + sides) % sides], new_e[((i - 1 + sides) % sides) * 2], new_face[i]);
+      new_h[i * 4 + 3]->setNeighbors(new_h[((i + 1) % sides) * 4 + 3], new_h[i * 4 + 1], new_v[(i - 1 + sides) % sides], new_e[i * 2 + 1], f);
+
+      //save the value before go to next
+      temp_h = old_h;
+      old_h = old_h->next();
+      temp_h->next() = new_h[i * 4];
+    }
+
+    //assign halfedge to original face
+    f->halfedge() = new_h[3];
+    return f;
   }
 
   void HalfedgeMesh::bevelFaceComputeNewPositions(
@@ -640,6 +703,18 @@ namespace CMU462
     //    position correponding to vertex i
     // }
     //
+    FaceIter f = newHalfedges[0]->twin()->next()->twin()->face();
+
+    Vector3D f_norm = f->normal();
+    Vector3D f_center = f->centroid();
+
+    size_t n = originalVertexPositions.size();
+
+    for (size_t i = 0; i < n; i++)
+    {
+      Vector3D pi = originalVertexPositions[i];
+      newHalfedges[i]->vertex()->position = newHalfedges[i]->vertex()->position + f_norm * normalShift + (f_center - pi) * tangentialInset;
+    }
   }
 
   void HalfedgeMesh::bevelVertexComputeNewPositions(
@@ -689,9 +764,74 @@ namespace CMU462
 
   void HalfedgeMesh::splitPolygon(FaceIter f)
   {
-    // TODO: (meshedit)
     // Triangulate a polygonal face
-    showError("splitPolygon() not implemented.");
+    int degree = f->degree();
+
+    if (degree == 3)
+    {
+      return;
+    }
+
+    VertexIter v0 = f->halfedge()->vertex();
+    FaceIter f0 = f;
+    std::vector<HalfedgeIter> face_halfedges;
+    HalfedgeIter temp = f->halfedge();
+    do
+    {
+      face_halfedges.push_back(temp);
+      temp = temp->next();
+    } while (temp != f->halfedge());
+
+    std::vector<VertexIter> face_vertices;
+    temp = f->halfedge();
+    do
+    {
+      face_vertices.push_back(temp->vertex());
+      temp = temp->next();
+    } while (temp != f->halfedge());
+
+    std::vector<HalfedgeIter> halfedges_0;
+    std::vector<HalfedgeIter> halfedges_1;
+    std::vector<EdgeIter> edges;
+    std::vector<FaceIter> faces;
+    for (int i = 0; i < degree - 3; i++)
+    {
+      halfedges_0.push_back(newHalfedge());
+      halfedges_1.push_back(newHalfedge());
+      edges.push_back(newEdge());
+      faces.push_back(newFace());
+    }
+
+    for (int i = 0; i < degree - 3; i++)
+    {
+      halfedges_0[i]->twin() = halfedges_1[i];
+      halfedges_0[i]->vertex() = face_vertices[i + 2];
+      face_vertices[i + 2]->halfedge() = halfedges_0[i];
+      if (i == 0)
+      {
+        halfedges_0[i]->face() = f0;
+        halfedges_0[i]->next() = face_halfedges[0];
+        f0->halfedge() = halfedges_0[i];
+      }
+      else
+      {
+        halfedges_0[i]->face() = faces[i - 1];
+        halfedges_0[i]->next() = halfedges_1[i - 1];
+        faces[i - 1]->halfedge() = halfedges_0[i];
+      }
+      halfedges_0[i]->edge() = edges[i];
+      face_halfedges[i + 1]->next() = halfedges_0[i];
+
+      halfedges_1[i]->twin() = halfedges_0[i];
+      halfedges_1[i]->vertex() = v0;
+      halfedges_1[i]->face() = faces[i];
+      halfedges_1[i]->next() = face_halfedges[i + 2];
+      halfedges_1[i]->edge() = edges[i];
+
+      faces[i]->halfedge() = halfedges_1[i];
+      edges[i]->halfedge() = halfedges_1[i];
+    }
+    face_halfedges.back()->next() = halfedges_1.back();
   }
 
   EdgeRecord::EdgeRecord(EdgeIter &_edge) : edge(_edge)
